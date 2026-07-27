@@ -1,1 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subscription Tracker</title>
+<style>
+  :root{
+    --bg:#F4F6F9; --ink:#16202E; --sub:#8A94A2; --line:#E4E8EE; --surface:#fff;
+    --slate1:#1C2A3A; --slate2:#243a52; --mint:#2DBE97; --mintSoft:#E3F6F0; --warn:#E4694E;
+    --sans:'Segoe UI',system-ui,-apple-system,sans-serif;
+    --num:'SF Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);padding:26px 16px 48px}
+  .wrap{max-width:680px;margin:0 auto}
+  .hero{background:linear-gradient(135deg,var(--slate1),var(--slate2));border-radius:20px;padding:26px 26px 22px;color:#fff;box-shadow:0 8px 24px rgba(28,42,58,.22)}
+  .hero .top{display:flex;justify-content:space-between;align-items:flex-start}
+  .hero .cap{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:#9db0c4}
+  .hero select{background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:8px;padding:4px 8px;font-size:14px;cursor:pointer}
+  .hero .big{font-family:var(--num);font-size:52px;font-weight:800;letter-spacing:-.02em;line-height:1.05;margin-top:6px}
+  .stats{display:flex;gap:24px;margin-top:14px;flex-wrap:wrap}
+  .stat .v{font-family:var(--num);font-size:18px;font-weight:700}
+  .stat .l{color:#9db0c4;font-size:12px}
+  .bar{display:flex;height:8px;border-radius:999px;overflow:hidden;margin-top:18px;background:rgba(255,255,255,.1)}
+  .form{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .form input,.form select{border:1px solid var(--line);border-radius:9px;padding:9px 10px;font-size:14px;outline:none;color:var(--ink);background:#fff}
+  .cost{display:flex;align-items:center;flex:1 1 100px;border:1px solid var(--line);border-radius:9px;padding:0 10px;background:#fff}
+  .cost span{color:var(--sub)}
+  .cost input{border:none!important;padding:9px 4px;font-family:var(--num);width:100%;background:transparent}
+  .addbtn{border:none;background:var(--mint);color:#083b2d;border-radius:9px;padding:10px 18px;font-weight:700;font-size:14px;cursor:pointer;flex:0 0 auto}
+  .list{margin-top:16px;display:grid;gap:8px}
+  .item{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 16px;position:relative;overflow:hidden}
+  .stripe{position:absolute;left:0;top:0;bottom:0;width:4px}
+  .itemrow{display:flex;align-items:center;gap:12px;padding-left:6px}
+  .name{font-weight:700;font-size:15.5px}
+  .meta{color:var(--sub);font-size:12.5px;margin-top:2px}
+  .yr{font-family:var(--num);font-weight:700;font-size:16px;text-align:right}
+  .yrl{color:var(--sub);font-size:11px;text-align:right}
+  .rm{border:none;background:transparent;color:var(--sub);cursor:pointer;font-size:20px;line-height:1;padding:4px}
+  .track{height:4px;background:var(--bg);border-radius:999px;margin-top:10px;margin-left:6px;overflow:hidden}
+  .fill{height:100%;opacity:.55;border-radius:999px}
+  .empty{text-align:center;color:var(--sub);padding:40px 20px;background:var(--surface);border:1px dashed var(--line);border-radius:14px}
+  .footer{text-align:center;margin-top:18px}
+  .clear{border:none;background:transparent;color:var(--sub);font-size:13px;cursor:pointer;text-decoration:underline}
+  .saved{color:var(--sub);font-size:12px;margin-left:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="top">
+      <span class="cap">You spend, per year</span>
+      <select id="cur"></select>
+    </div>
+    <div class="big" id="big">$0</div>
+    <div class="stats">
+      <div class="stat"><div class="v" id="sMonth">$0</div><div class="l">per month</div></div>
+      <div class="stat"><div class="v" id="sCount">0</div><div class="l">subscriptions</div></div>
+      <div class="stat"><div class="v" id="sAvg">$0</div><div class="l">avg each</div></div>
+    </div>
+    <div class="bar" id="bar"></div>
+  </div>
 
+  <div class="form">
+    <input id="fName" placeholder="Subscription name" style="flex:2 1 150px">
+    <div class="cost"><span id="curSym">$</span><input id="fCost" placeholder="0.00" inputmode="decimal"></div>
+    <select id="fCycle" style="flex:1 1 90px"></select>
+    <select id="fCat" style="flex:1 1 100px"></select>
+    <button class="addbtn" id="add">Add</button>
+  </div>
+
+  <div class="list" id="list"></div>
+
+  <div class="footer" id="footer"></div>
+</div>
+
+<script>
+const CYCLES={weekly:52,monthly:12,quarterly:4,yearly:1};
+const CATS=["Streaming","Music","Software","Fitness","News","Gaming","Cloud","Other"];
+const CAT_COLOR={Streaming:"#E4694E",Music:"#9B5DE5",Software:"#2DBE97",Fitness:"#F4A62A",News:"#4C8BF5",Gaming:"#EC5A8D",Cloud:"#3AC4D6",Other:"#8A94A2"};
+const CURRENCIES=["$","€","£","¥","₹"];
+const KEY="subTracker.v1";
+const uid=()=>Math.random().toString(36).slice(2,9);
+const yearlyOf=s=>(parseFloat(s.cost)||0)*(CYCLES[s.cycle]||12);
+
+let subs=[],cur="$";
+
+/* load */
+try{
+  const raw=localStorage.getItem(KEY);
+  if(raw){const p=JSON.parse(raw);subs=p.subs||[];cur=p.cur||"$";}
+  else seed();
+}catch(e){seed();}
+function seed(){
+  subs=[
+    {id:uid(),name:"Netflix",cost:"15.49",cycle:"monthly",category:"Streaming"},
+    {id:uid(),name:"Spotify",cost:"11.99",cycle:"monthly",category:"Music"},
+    {id:uid(),name:"iCloud+",cost:"2.99",cycle:"monthly",category:"Cloud"},
+    {id:uid(),name:"Amazon Prime",cost:"139",cycle:"yearly",category:"Streaming"},
+  ];
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({subs,cur}));}catch(e){}}
+
+const fmt=n=>cur+Number(n).toLocaleString(undefined,{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2});
+
+/* populate selects */
+const curSel=document.getElementById("cur");
+CURRENCIES.forEach(c=>curSel.appendChild(new Option(c,c)));
+curSel.value=cur;
+const fCycle=document.getElementById("fCycle");
+Object.keys(CYCLES).forEach(c=>fCycle.appendChild(new Option(c,c)));
+fCycle.value="monthly";
+const fCat=document.getElementById("fCat");
+CATS.forEach(c=>fCat.appendChild(new Option(c,c)));
+
+function render(){
+  const totalYear=subs.reduce((a,s)=>a+yearlyOf(s),0);
+  const totalMonth=totalYear/12;
+  document.getElementById("big").textContent=fmt(Math.round(totalYear));
+  document.getElementById("sMonth").textContent=fmt(Math.round(totalMonth));
+  document.getElementById("sCount").textContent=subs.length;
+  document.getElementById("sAvg").textContent=subs.length?fmt(Math.round(totalYear/subs.length)):fmt(0);
+  document.getElementById("curSym").textContent=cur;
+
+  // category bar
+  const byCat={};
+  subs.forEach(s=>{byCat[s.category]=(byCat[s.category]||0)+yearlyOf(s);});
+  const bar=document.getElementById("bar");bar.innerHTML="";
+  Object.entries(byCat).sort((a,b)=>b[1]-a[1]).forEach(([c,v])=>{
+    const d=document.createElement("div");
+    d.style.width=(totalYear?(v/totalYear*100):0)+"%";
+    d.style.background=CAT_COLOR[c]||"#8A94A2";
+    d.title=c+" · "+fmt(Math.round(v));
+    bar.appendChild(d);
+  });
+
+  // list
+  const sorted=[...subs].sort((a,b)=>yearlyOf(b)-yearlyOf(a));
+  const maxYear=sorted.length?yearlyOf(sorted[0]):1;
+  const list=document.getElementById("list");list.innerHTML="";
+  if(!subs.length){
+    const e=document.createElement("div");e.className="empty";
+    e.textContent="Nothing tracked yet. Add your first subscription above to see the yearly damage.";
+    list.appendChild(e);
+  }
+  sorted.forEach(s=>{
+    const y=yearlyOf(s),color=CAT_COLOR[s.category]||"#8A94A2";
+    const item=document.createElement("div");item.className="item";
+    item.innerHTML=`
+      <div class="stripe" style="background:${color}"></div>
+      <div class="itemrow">
+        <div style="flex:1;min-width:0">
+          <div class="name"></div>
+          <div class="meta"></div>
+        </div>
+        <div><div class="yr">${fmt(Math.round(y))}</div><div class="yrl">per year</div></div>
+        <button class="rm" title="Remove">×</button>
+      </div>
+      <div class="track"><div class="fill" style="width:${Math.max(4,y/maxYear*100)}%;background:${color}"></div></div>`;
+    item.querySelector(".name").textContent=s.name;
+    item.querySelector(".meta").textContent=fmt(parseFloat(s.cost)||0)+"/"+s.cycle.replace("ly","")+" · "+s.category;
+    item.querySelector(".rm").addEventListener("click",()=>{subs=subs.filter(x=>x.id!==s.id);save();render();});
+    list.appendChild(item);
+  });
+
+  // footer
+  const f=document.getElementById("footer");f.innerHTML="";
+  if(subs.length){
+    const c=document.createElement("button");c.className="clear";c.textContent="Clear all";
+    c.addEventListener("click",()=>{if(confirm("Clear all subscriptions?")){subs=[];save();render();}});
+    const s=document.createElement("span");s.className="saved";s.textContent="· saved in this browser";
+    f.append(c,s);
+  }
+}
+
+/* add */
+function add(){
+  const name=document.getElementById("fName").value.trim();
+  const cost=document.getElementById("fCost").value;
+  if(!name||!(parseFloat(cost)>0))return;
+  subs.push({id:uid(),name,cost,cycle:fCycle.value,category:fCat.value});
+  document.getElementById("fName").value="";document.getElementById("fCost").value="";
+  save();render();
+}
+document.getElementById("add").addEventListener("click",add);
+document.getElementById("fName").addEventListener("keydown",e=>{if(e.key==="Enter")add();});
+document.getElementById("fCost").addEventListener("keydown",e=>{if(e.key==="Enter")add();});
+document.getElementById("fCost").addEventListener("input",e=>{e.target.value=e.target.value.replace(/[^\d.]/g,"");});
+curSel.addEventListener("change",()=>{cur=curSel.value;save();render();});
+
+render();
+</script>
+</body>
+</html>
